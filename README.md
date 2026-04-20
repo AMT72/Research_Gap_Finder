@@ -40,6 +40,7 @@ The system doesn't just summarize; it **critiques** and **compares** to find wha
 
 ## 📁 Project Structure
 
+```
 Research_Gap_Finder/
 │
 ├── corpus/                 # User-uploaded Research PDFs
@@ -56,7 +57,7 @@ Research_Gap_Finder/
 ├── app.py                  # Streamlit entry point
 ├── requirements.txt        # Dependencies
 └── .env                    # API Keys
-
+```
 ---
 
 ## 📊 Comparison Matrix (Sample Output)
