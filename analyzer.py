@@ -1,5 +1,5 @@
 """
-المرحلة الثانية والثالثة: التلخيص وكشف الـ Research Gaps باستخدام Claude API
+Phase 2 & 3: Paper summarization and research gap detection via Claude API
 """
 
 import json
@@ -11,31 +11,31 @@ MODEL = "claude-sonnet-4-20250514"
 
 
 # ──────────────────────────────────────────────
-# المرحلة الثانية: تلخيص كل ورقة بحثية
+# Phase 2: Summarize each research paper
 # ──────────────────────────────────────────────
 
-SUMMARY_PROMPT = """أنت محلل أبحاث علمي متخصص. حلّل هذه الورقة البحثية واستخرج المعلومات التالية بدقة.
+SUMMARY_PROMPT = """You are an expert research analyst. Analyze the following research paper and extract key information.
 
-أجب بـ JSON فقط بهذا الهيكل الدقيق، ولا تضف أي نص خارجه:
+Reply with JSON only — no text outside the JSON — using this exact structure:
 
 {{
-  "title": "عنوان الورقة",
-  "year": "سنة النشر أو unknown",
-  "authors": "المؤلفون الرئيسيون",
-  "problem": "المشكلة التي تحلها الورقة في جملة واحدة",
-  "method": "الطريقة أو النموذج المستخدم",
-  "dataset": "البيانات المستخدمة للتجربة",
-  "main_result": "أهم نتيجة رقمية أو نوعية",
-  "limitations": ["قيد 1", "قيد 2", "قيد 3"],
-  "keywords": ["كلمة 1", "كلمة 2", "كلمة 3", "كلمة 4", "كلمة 5"]
+  "title": "Paper title",
+  "year": "Publication year or unknown",
+  "authors": "Main authors",
+  "problem": "The problem this paper solves in one sentence",
+  "method": "The method or model used",
+  "dataset": "Dataset(s) used for experiments",
+  "main_result": "The most important numerical or qualitative result",
+  "limitations": ["limitation 1", "limitation 2", "limitation 3"],
+  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
 }}
 
-الورقة البحثية:
+Research paper:
 {paper_text}"""
 
 
 def summarize_paper(paper_text: str, filename: str = "") -> dict:
-    """تلخيص ورقة بحثية واحدة باستخدام Claude"""
+    """Summarize a single research paper using Claude"""
     prompt = SUMMARY_PROMPT.format(paper_text=paper_text)
 
     try:
@@ -46,8 +46,6 @@ def summarize_paper(paper_text: str, filename: str = "") -> dict:
         )
 
         raw = response.content[0].text.strip()
-
-        # تنظيف الـ JSON إذا كان محاطاً بـ ```
         raw = re.sub(r'^```json\s*', '', raw)
         raw = re.sub(r'^```\s*', '', raw)
         raw = re.sub(r'\s*```$', '', raw)
@@ -65,7 +63,7 @@ def summarize_paper(paper_text: str, filename: str = "") -> dict:
             "title": filename,
             "year": "unknown",
             "authors": "unknown",
-            "problem": "تعذّر استخراج المعلومات",
+            "problem": "Failed to extract information",
             "method": "unknown",
             "dataset": "unknown",
             "main_result": "unknown",
@@ -80,7 +78,7 @@ def summarize_paper(paper_text: str, filename: str = "") -> dict:
             "title": filename,
             "year": "unknown",
             "authors": "unknown",
-            "problem": "خطأ في الاتصال بـ API",
+            "problem": "API connection error",
             "method": "unknown",
             "dataset": "unknown",
             "main_result": "unknown",
@@ -90,7 +88,7 @@ def summarize_paper(paper_text: str, filename: str = "") -> dict:
 
 
 def summarize_all_papers(papers: list[dict]) -> list[dict]:
-    """تلخيص قائمة من الأوراق البحثية"""
+    """Summarize a list of research papers"""
     summaries = []
     for paper in papers:
         summary = summarize_paper(paper["text"], paper["filename"])
@@ -99,71 +97,68 @@ def summarize_all_papers(papers: list[dict]) -> list[dict]:
 
 
 # ──────────────────────────────────────────────
-# المرحلة الثالثة: كشف الـ Research Gaps
+# Phase 3: Research Gap Detection
 # ──────────────────────────────────────────────
 
-GAP_PROMPT = """أنت خبير في تحليل الأبحاث العلمية وتحديد الثغرات البحثية.
+GAP_PROMPT = """You are an expert at analyzing research literature and identifying research gaps.
 
-بناءً على ملخصات الأوراق التالية، قم بالتحليل الشامل واستخرج:
+Based on the following paper summaries, perform a comprehensive analysis:
 
-الأوراق البحثية:
 {summaries_text}
 
-أجب بـ JSON فقط بهذا الهيكل، ولا تضف أي نص خارجه:
+Reply with JSON only — no text outside the JSON — using this exact structure:
 
 {{
-  "common_methods": ["الطريقة الأكثر استخداماً", "الثانية", "الثالثة"],
-  "common_datasets": ["Dataset الأكثر استخداماً", "الثاني"],
-  "common_limitations": ["القيد المشترك الأول", "الثاني", "الثالث"],
+  "common_methods": ["most used method", "second", "third"],
+  "common_datasets": ["most used dataset", "second"],
+  "common_limitations": ["shared limitation 1", "shared limitation 2", "shared limitation 3"],
   "research_gaps": [
     {{
-      "gap": "وصف الثغرة البحثية",
-      "evidence": "الدليل من الأوراق على وجود هذه الثغرة",
+      "gap": "Description of the research gap",
+      "evidence": "Evidence from the papers supporting this gap",
       "novelty_score": 8.5
     }},
     {{
-      "gap": "ثغرة ثانية",
-      "evidence": "الدليل",
+      "gap": "Second gap",
+      "evidence": "Evidence",
       "novelty_score": 7.0
     }},
     {{
-      "gap": "ثغرة ثالثة",
-      "evidence": "الدليل",
+      "gap": "Third gap",
+      "evidence": "Evidence",
       "novelty_score": 6.5
     }}
   ],
   "suggested_ideas": [
     {{
-      "idea": "فكرة بحثية مقترحة تعالج الثغرة",
-      "addresses_gap": "الثغرة التي تعالجها",
-      "feasibility": "عالية / متوسطة / منخفضة",
-      "why_promising": "لماذا هذه الفكرة واعدة"
+      "idea": "A promising research idea that addresses the gap",
+      "addresses_gap": "Which gap it addresses",
+      "feasibility": "High / Medium / Low",
+      "why_promising": "Why this idea is promising"
     }},
     {{
-      "idea": "فكرة ثانية",
-      "addresses_gap": "الثغرة التي تعالجها",
-      "feasibility": "عالية",
-      "why_promising": "السبب"
+      "idea": "Second idea",
+      "addresses_gap": "Gap it addresses",
+      "feasibility": "High",
+      "why_promising": "Reason"
     }}
   ],
-  "overall_summary": "ملخص عام للمجال وأبرز الاتجاهات في 2-3 جمل"
+  "overall_summary": "A 2-3 sentence overview of the field and its main trends"
 }}"""
 
 
 def detect_gaps(summaries: list[dict]) -> dict:
-    """كشف الثغرات البحثية من ملخصات الأوراق"""
-
-    # تحويل الملخصات إلى نص منظم
+    """Detect research gaps from paper summaries"""
     summaries_text = ""
     for i, s in enumerate(summaries, 1):
         summaries_text += f"""
-ورقة {i}: {s.get('title', s.get('filename', f'ورقة {i}'))}
-- المشكلة: {s.get('problem', 'غير محدد')}
-- الطريقة: {s.get('method', 'غير محدد')}
-- البيانات: {s.get('dataset', 'غير محدد')}
-- النتيجة: {s.get('main_result', 'غير محدد')}
-- القيود: {', '.join(s.get('limitations', []))}
-- الكلمات المفتاحية: {', '.join(s.get('keywords', []))}
+Paper {i}: {s.get('title', s.get('filename', f'Paper {i}'))}
+- Problem: {s.get('problem', 'N/A')}
+- Method: {s.get('method', 'N/A')}
+- Dataset: {s.get('dataset', 'N/A')}
+- Result: {s.get('main_result', 'N/A')}
+- Limitations: {', '.join(s.get('limitations', []))}
+- Keywords: {', '.join(s.get('keywords', []))}
 """
 
     prompt = GAP_PROMPT.format(summaries_text=summaries_text)
@@ -193,7 +188,7 @@ def detect_gaps(summaries: list[dict]) -> dict:
             "common_limitations": [],
             "research_gaps": [],
             "suggested_ideas": [],
-            "overall_summary": "تعذّر تحليل البيانات"
+            "overall_summary": "Failed to analyze data"
         }
     except Exception as e:
         return {
@@ -204,34 +199,34 @@ def detect_gaps(summaries: list[dict]) -> dict:
             "common_limitations": [],
             "research_gaps": [],
             "suggested_ideas": [],
-            "overall_summary": "خطأ في الاتصال"
+            "overall_summary": "Connection error"
         }
 
 
 # ──────────────────────────────────────────────
-# Citation Graph: العلاقات بين الأوراق
+# Citation Graph: Relations between papers
 # ──────────────────────────────────────────────
 
-CITATION_PROMPT = """بناءً على ملخصات الأوراق التالية، حدد العلاقات المنطقية بينها.
+CITATION_PROMPT = """Based on the following paper summaries, identify logical relationships between them.
 
 {summaries_text}
 
-أجب بـ JSON فقط:
+Reply with JSON only:
 {{
   "relations": [
-    {{"from": "عنوان الورقة أو رقمها", "to": "عنوان الورقة أو رقمها", "type": "extends / compares / uses_same_dataset / contradicts"}},
+    {{"from": "paper number", "to": "paper number", "type": "extends / compares / uses_same_dataset / contradicts"}},
     {{"from": "...", "to": "...", "type": "..."}}
   ]
 }}
 
-استخدم أرقام الأوراق (1، 2، 3...) كمعرفات."""
+Use paper numbers (1, 2, 3...) as identifiers."""
 
 
 def build_citation_relations(summaries: list[dict]) -> list[dict]:
-    """استخراج العلاقات بين الأوراق"""
+    """Extract relationships between papers"""
     summaries_text = ""
     for i, s in enumerate(summaries, 1):
-        summaries_text += f"ورقة {i}: {s.get('title', f'ورقة {i}')} - الطريقة: {s.get('method', '')} - البيانات: {s.get('dataset', '')}\n"
+        summaries_text += f"Paper {i}: {s.get('title', f'Paper {i}')} — Method: {s.get('method', '')} — Dataset: {s.get('dataset', '')}\n"
 
     prompt = CITATION_PROMPT.format(summaries_text=summaries_text)
 
@@ -252,7 +247,7 @@ def build_citation_relations(summaries: list[dict]) -> list[dict]:
 
 
 if __name__ == "__main__":
-    print("اختبار analyzer.py")
+    print("Testing analyzer.py")
     test_text = """
     This paper presents a deep learning approach for car damage detection using CNNs.
     We use the CarDD dataset with 4000 images. Our model achieves 91% accuracy.
