@@ -1,106 +1,128 @@
-# 🕵️‍♂️ Research_Gap_Finder — Novelty & Gap Detector
+# 🔍 Research Gap Finder
 
-> **Autonomous Research Engine** that processes 20–100 academic papers to synthesize knowledge, map citation networks, and identify unexplored "Research Gaps" using LLMs.
-
----
-
-## 💡 Overview
-
-**Research_Gap_Finder** is a sophisticated tool designed to help researchers skip the "manual review" phase. Instead of reading 50+ papers to find a thesis topic, this system analyzes the entire corpus to find the **Gold (The Gap)**—the specific areas where current research is lacking.
-
-> Upload PDF Corpus  →  Structured Extraction  →  Synthesis Engine  →  Research Gap Discovery
-
-The system doesn't just summarize; it **critiques** and **compares** to find what *hasn't* been done yet.
+نظام ذكاء اصطناعي يكتشف الثغرات البحثية من الأوراق العلمية تلقائياً.
 
 ---
 
-## 🧠 The 4 Intelligence Layers
-
-| Layer | Function | Value |
-|---|---|---|
-| **1. Comparison Matrix** | Structured extraction of Methods, Datasets, and Results. | Quick pattern recognition across studies. |
-| **2. Gap Detection** | Identifying scenarios or datasets no one has covered. | Direct path to "Novel" research ideas. |
-| **3. Citation Graph** | Visualizing the "Academic Lineage" (Who cited whom). | Understanding the evolution of the field. |
-| **4. Idea Generator** | Proposing new experiments with a **Novelty Score**. | Validating the feasibility of new research directions. |
-
----
-
-## 🛠️ Architecture & Tech Stack
-
-| Layer | Technology |
-|---|---|
-| **Language Model** | GPT-4o / Claude 3.5 Sonnet (via LangChain) |
-| **Vector DB** | [ChromaDB](https://www.trychroma.com/) — for Semantic Search |
-| **PDF Extraction** | `PyMuPDF` + `Grobid` (for layout-aware parsing) |
-| **Graph Logic** | `NetworkX` (Backend) + `D3.js` (Frontend visualization) |
-| **UI** | [Streamlit](https://streamlit.io/) — Interactive Research Dashboard |
-| **Language** | Python 3.11.9 |
-
----
-
-## 📁 Project Structure
+## 🗂️ هيكل المشروع
 
 ```
-Research_Gap_Finder/
-│
-├── corpus/                 # User-uploaded Research PDFs
-│   └── medical_rag/        # Example topic folder
-│
-├── src/                    # Source code
-│   ├── extractor.py        # PDF to JSON (Abstract, Methods, Limitations)
-│   ├── brain.py            # RAG & Gap Analysis logic
-│   ├── graph_gen.py        # Citation network & visualization logic
-│   └── novelty_score.py    # Similarity & Originality calculation
-│
-├── notebooks/              # Testing prompts & embeddings
-│
-├── app.py                  # Streamlit entry point
-├── requirements.txt        # Dependencies
-└── .env                    # API Keys
+research_gap_finder/
+├── app.py              ← واجهة Streamlit الرئيسية
+├── pdf_reader.py       ← قراءة وتنظيف ملفات PDF
+├── analyzer.py         ← التلخيص وكشف الثغرات (Claude API)
+├── report.py           ← توليد تقرير PDF
+├── requirements.txt    ← المكتبات المطلوبة
+├── .env.example        ← مثال على إعداد الـ API Key
+└── README.md
 ```
----
-
-## 📊 Comparison Matrix (Sample Output)
-
-| Paper | Method | Dataset | Key Result | The Gap (Limitation) |
-|:---:|:---:|:---:|:---:|:---:|
-| Paper A | RAG + CNN | MIMIC-III | 91% Acc | Limited to text-only retrieval. |
-| Paper B | GraphRAG | PubMed | 93% Acc | High latency in real-time inference. |
-| **Discovery** | **???** | **???** | **???** | **No study covers Multimodal RAG for Arabic.** |
 
 ---
 
-## 🔄 Pipeline Overview
+## ⚙️ التثبيت خطوة بخطوة
 
-1. **Structured Ingestion:** Using `PyMuPDF` to extract text and segment it into Methodology, Results, and Future Work.
-2. **Semantic Embedding:** Transforming text into vectors to find semantic overlaps.
-3. **Cross-Paper Analysis:** The LLM compares all papers simultaneously to find "uncovered" datasets or methods.
-4. **Graph Generation:** Building a relationship map based on internal citations.
-5. **Novelty Evaluation:** Calculating a score based on how "different" a new idea is from the existing corpus.
-
----
-
-## 🚀 Setup & Installation
-
-### 1. Clone the repository
+### 1. تثبيت Python
+تأكد أن عندك Python 3.10 أو أحدث:
 ```bash
-git clone <repo-url>
-cd Research_Gap_Finder
+python --version
 ```
 
-### 2. Install Dependencies
+### 2. إنشاء بيئة افتراضية (مستحسن)
+```bash
+python -m venv venv
 
+# Windows
+venv\Scripts\activate
+
+# Mac/Linux
+source venv/bin/activate
+```
+
+### 3. تثبيت المكتبات
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Run the System
+### 4. إعداد الـ API Key
+انسخ ملف `.env.example` وسمّه `.env`:
+```bash
+cp .env.example .env
+```
+ثم افتحه وضع مفتاحك:
+```
+ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxx
+```
 
+احصل على مفتاحك مجاناً من: https://console.anthropic.com
+
+### 5. تشغيل التطبيق
 ```bash
 streamlit run app.py
 ```
 
-## 👥 Team
-Azzam Abdullah 
+سيفتح المتصفح تلقائياً على: http://localhost:8501
 
-Samer Mawlawi
+---
+
+## 🚀 طريقة الاستخدام
+
+1. افتح التطبيق في المتصفح
+2. أدخل الـ API Key في الشريط الجانبي
+3. ارفع 2-10 ملفات PDF (أوراق بحثية)
+4. اضغط **ابدأ التحليل**
+5. انتظر دقيقتين تقريباً
+6. شاهد النتائج وحمّل التقرير PDF
+
+---
+
+## 📊 ما يقدمه النظام
+
+| الميزة | الوصف |
+|--------|--------|
+| ملخص كل ورقة | الطريقة، البيانات، النتائج، القيود |
+| Comparison Matrix | جدول مقارنة لكل الأوراق |
+| Research Gaps | ثغرات بحثية مع Novelty Score من 10 |
+| Idea Generator | أفكار بحثية مقترحة مع تقييم الجدوى |
+| Citation Graph | شبكة العلاقات بين الأوراق |
+| تقرير PDF | تقرير احترافي قابل للتحميل |
+
+---
+
+## 🔑 الحصول على API Key
+
+1. اذهب إلى https://console.anthropic.com
+2. أنشئ حساباً مجانياً
+3. اذهب إلى API Keys
+4. انشئ مفتاحاً جديداً
+5. الـ free tier يكفي لتجربة المشروع
+
+---
+
+## ❓ حل المشاكل الشائعة
+
+**المشكلة: `ModuleNotFoundError`**
+```bash
+pip install -r requirements.txt
+```
+
+**المشكلة: `AuthenticationError`**
+- تحقق من صحة الـ API Key
+- تأكد أنك أدخلته في الشريط الجانبي
+
+**المشكلة: الورقة "قصيرة جداً"**
+- الملف قد يكون محمياً أو ممسوحاً ضوئياً (صور فقط)
+- جرب ورقة أخرى
+
+**المشكلة: `streamlit: command not found`**
+```bash
+python -m streamlit run app.py
+```
+
+---
+
+## 🛠️ التطوير المستقبلي
+
+- [ ] دعم جلب الأوراق من Arxiv تلقائياً
+- [ ] واجهة عربية كاملة
+- [ ] تحليل الاستشهادات الفعلية
+- [ ] دعم ملفات Word
