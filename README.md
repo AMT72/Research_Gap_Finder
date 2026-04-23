@@ -1,33 +1,34 @@
 # 🔍 Research Gap Finder
 
-نظام ذكاء اصطناعي يكتشف الثغرات البحثية من الأوراق العلمية تلقائياً.
+An AI-powered system that automatically discovers research gaps from scientific papers.
 
 ---
 
-## 🗂️ هيكل المشروع
+## 🗂️ Project Structure
 
 ```
 research_gap_finder/
-├── app.py              ← واجهة Streamlit الرئيسية
-├── pdf_reader.py       ← قراءة وتنظيف ملفات PDF
-├── analyzer.py         ← التلخيص وكشف الثغرات (Claude API)
-├── report.py           ← توليد تقرير PDF
-├── requirements.txt    ← المكتبات المطلوبة
-├── .env.example        ← مثال على إعداد الـ API Key
+├── app.py              ← Main Streamlit interface
+├── pdf_reader.py       ← PDF parsing and cleaning
+├── analyzer.py         ← Summarization and gap detection (Claude API)
+├── report.py           ← PDF report generation
+├── requirements.txt    ← Required libraries
+├── .env.example        ← API Key configuration template
 └── README.md
 ```
 
 ---
 
-## ⚙️ التثبيت خطوة بخطوة
+## ⚙️ Step-by-Step Installation
 
-### 1. تثبيت Python
-تأكد أن عندك Python 3.10 أو أحدث:
+### 1. Install Python
+Ensure you have Python 3.10 or newer:
+
 ```bash
 python --version
 ```
 
-### 2. إنشاء بيئة افتراضية (مستحسن)
+### 2.2. Create a Virtual Environment (Recommended)
 ```bash
 python -m venv venv
 
@@ -38,91 +39,90 @@ venv\Scripts\activate
 source venv/bin/activate
 ```
 
-### 3. تثبيت المكتبات
+### 3. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. إعداد الـ API Key
-انسخ ملف `.env.example` وسمّه `.env`:
+### 4. Setup API Key
+Copy the `.env.example` file and rename it to `.env`:
 ```bash
 cp .env.example .env
 ```
-ثم افتحه وضع مفتاحك:
+Open the file and add your key:
 ```
 ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxx
 ```
 
-احصل على مفتاحك مجاناً من: https://console.anthropic.com
+Get your key for free at: https://console.anthropic.com
 
-### 5. تشغيل التطبيق
+### 5. Run the Application
 ```bash
 streamlit run app.py
 ```
 
-سيفتح المتصفح تلقائياً على: http://localhost:8501
+The browser will automatically open at: http://localhost:8501
 
 ---
 
-## 🚀 طريقة الاستخدام
+## 🚀 How to Use
 
-1. افتح التطبيق في المتصفح
-2. أدخل الـ API Key في الشريط الجانبي
-3. ارفع 2-10 ملفات PDF (أوراق بحثية)
-4. اضغط **ابدأ التحليل**
-5. انتظر دقيقتين تقريباً
-6. شاهد النتائج وحمّل التقرير PDF
+1. Open the app in your browser.
+2. Enter your API key in the sidebar
+3. Upload 2-10 PDF files (research papers).
+4. Click Start Analysis.
+5. Wait for approximately 2 minutes.
+6. View the results and download the PDF report.
+   
+---
+
+## 📊 Features & Output
+
+| Feature | Description |
+| :--- | :--- |
+| Paper Summary | Methodology, Data, Results, and Limitations. |
+| Comparison Matrix | A comparative table across all uploaded papers. |
+| Research Gaps | Identified gaps with a "Novelty Score" out of 10. |
+| Idea Generator | Suggested research ideas with feasibility assessment. |
+| Citation Graph | Visualizing relationships between papers. |
+| PDF Report | Downloadable professional report. |
 
 ---
 
-## 📊 ما يقدمه النظام
+## 🔑 Obtaining an API Key
 
-| الميزة | الوصف |
-|--------|--------|
-| ملخص كل ورقة | الطريقة، البيانات، النتائج، القيود |
-| Comparison Matrix | جدول مقارنة لكل الأوراق |
-| Research Gaps | ثغرات بحثية مع Novelty Score من 10 |
-| Idea Generator | أفكار بحثية مقترحة مع تقييم الجدوى |
-| Citation Graph | شبكة العلاقات بين الأوراق |
-| تقرير PDF | تقرير احترافي قابل للتحميل |
+1. Go to [https://console.anthropic.com](https://console.anthropic.com).
+2. Create a free account.
+3. Navigate to **API Keys**.
+4. Create a new key.
+5. The free tier is sufficient for testing the project.
 
 ---
 
-## 🔑 الحصول على API Key
+## ❓ Troubleshooting
 
-1. اذهب إلى https://console.anthropic.com
-2. أنشئ حساباً مجانياً
-3. اذهب إلى API Keys
-4. انشئ مفتاحاً جديداً
-5. الـ free tier يكفي لتجربة المشروع
-
----
-
-## ❓ حل المشاكل الشائعة
-
-**المشكلة: `ModuleNotFoundError`**
+**Issue: `ModuleNotFoundError`**
 ```bash
 pip install -r requirements.txt
 ```
+**Issue: `AuthenticationError`**
+- Verify the validity of your API Key.
+- Ensure you have entered it correctly in the sidebar.
 
-**المشكلة: `AuthenticationError`**
-- تحقق من صحة الـ API Key
-- تأكد أنك أدخلته في الشريط الجانبي
+**Issue: Paper is "too short"**
+- The file might be protected or a scanned document (images only).
+- Try uploading a different research paper.
 
-**المشكلة: الورقة "قصيرة جداً"**
-- الملف قد يكون محمياً أو ممسوحاً ضوئياً (صور فقط)
-- جرب ورقة أخرى
-
-**المشكلة: `streamlit: command not found`**
+**Issue: `streamlit: command not found`**
+Run the application using:
 ```bash
 python -m streamlit run app.py
 ```
-
 ---
 
-## 🛠️ التطوير المستقبلي
+## 🛠️ Future Roadmap
 
-- [ ] دعم جلب الأوراق من Arxiv تلقائياً
-- [ ] واجهة عربية كاملة
-- [ ] تحليل الاستشهادات الفعلية
-- [ ] دعم ملفات Word
+- [ ] Support automatic paper retrieval from ArXiv.
+- [ ] Full Arabic language interface support.
+- [ ] In-depth citation and reference analysis.
+- [ ] Microsoft Word (.docx) file support.
