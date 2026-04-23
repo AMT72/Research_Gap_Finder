@@ -2,12 +2,22 @@
 Phase 2 & 3: Paper summarization and research gap detection via Claude API
 """
 
+
+
 import json
 import re
 import anthropic
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+api_key = os.getenv("ANTHROPIC_API_KEY")
+
+client = anthropic.Anthropic(api_key=api_key)
 
 client = anthropic.Anthropic()
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-3-5-sonnet-20240620"
 
 
 # ──────────────────────────────────────────────
