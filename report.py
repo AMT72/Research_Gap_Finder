@@ -141,12 +141,15 @@ def generate_report(summaries: list[dict], gaps: dict) -> bytes:
         story.append(KeepTogether([paper_block]))
         story.append(Spacer(1, 0.15*cm))
 
+        lims = s.get('limitations', [])
+        lims_str = " | ".join(lims) if isinstance(lims, list) else str(lims) or "—"
+
         details = [
-            ["Problem",    s.get('problem', '—')],
-            ["Method",     s.get('method', '—')],
-            ["Dataset",    s.get('dataset', '—')],
-            ["Result",     s.get('main_result', '—')],
-            ["Limitations", " | ".join(s.get('limitations', [])) or "—"],
+            ["Problem",     s.get('problem', '—')],
+            ["Method",      s.get('method', '—')],
+            ["Dataset",     s.get('dataset', '—')],
+            ["Result",      s.get('main_result', '—')],
+            ["Limitations", lims_str or "—"],
         ]
         detail_table = Table(
             [[Paragraph(k, styles['small']), Paragraph(v, styles['body'])] for k, v in details],

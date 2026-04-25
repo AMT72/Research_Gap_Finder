@@ -1,313 +1,190 @@
-"""
-Phase 2 & 3: Paper summarization and gap detection
-Using Ollama (local LLM) + RAG pipeline — no external API key needed.
-"""
-
 import json
 import re
-import requests
-from typing import List, Dict
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from rag_pipeline import PaperIndex, chunk_papers, build_paper_context, build_cross_paper_context
 
-from rag_pipeline import (
-    PaperIndex, chunk_papers,
-    build_paper_context, build_cross_paper_context
-)
-
-# ── Ollama config ──────────────────────────────
-OLLAMA_URL   = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "qwen2.5:14b"   # Change to "llama3:8b" if VRAM < 12GB
+MODEL_ID   = "Qwen/Qwen2.5-7B-Instruct"
+_tokenizer = None
+_model     = None
 
 
-def _ollama(prompt: str, temperature: float = 0.1) -> str:
-    """
-    Send a prompt to the local Ollama server and return the response text.
-    Raises RuntimeError if Ollama is not running.
-    """
-    payload = {
-        "model": OLLAMA_MODEL,
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "temperature": temperature,
-            "num_predict": 1024,
-        }
-    }
-    try:
-        resp = requests.post(OLLAMA_URL, json=payload, timeout=180)
-        resp.raise_for_status()
-        return resp.json().get("response", "").strip()
-    except requests.exceptions.ConnectionError:
-        raise RuntimeError(
-            "Cannot connect to Ollama. "
-            "Make sure Ollama is running: `ollama serve`"
+def load_model():
+    global _tokenizer, _model
+    if _model is not None:
+        return _tokenizer, _model
+    print(f"Loading {MODEL_ID} with 4-bit quantization...")
+    bnb = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16
+    )
+    _tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
+    _model = AutoModelForCausalLM.from_pretrained(
+        MODEL_ID,
+        quantization_config=bnb,
+        device_map="auto",
+        trust_remote_code=True,
+        torch_dtype=torch.bfloat16
+    )
+    _model.eval()
+    print("Model loaded.")
+    return _tokenizer, _model
+
+
+def _infer(prompt, max_new_tokens=800, temperature=0.1):
+    tokenizer, model = load_model()
+    msgs = [
+        {"role": "system", "content": "You are an expert research analyst. Always respond with valid JSON only."},
+        {"role": "user",   "content": prompt}
+    ]
+    text   = tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
+    inputs = tokenizer([text], return_tensors="pt").to(model.device)
+    with torch.no_grad():
+        out = model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            do_sample=(temperature > 0),
+            pad_token_id=tokenizer.eos_token_id
         )
-    except requests.exceptions.Timeout:
-        raise RuntimeError("Ollama request timed out (>180s). Try a smaller model.")
+    generated = out[0][inputs["input_ids"].shape[1]:]
+    return tokenizer.decode(generated, skip_special_tokens=True).strip()
 
 
-def _parse_json(raw: str) -> dict | list:
-    """Strip markdown fences and parse JSON"""
-    raw = re.sub(r'^```json\s*', '', raw.strip())
-    raw = re.sub(r'^```\s*',     '', raw)
-    raw = re.sub(r'\s*```$',     '', raw)
+def _parse_json(raw):
+    raw = re.sub(r"^```json\s*", "", raw.strip())
+    raw = re.sub(r"^```\s*",     "", raw)
+    raw = re.sub(r"\s*```$",     "", raw)
+    m = re.search(r"\{[\s\S]*\}", raw)
+    if m:
+        raw = m.group(0)
     return json.loads(raw)
 
 
-def check_ollama() -> dict:
-    """
-    Check if Ollama is running and the chosen model is available.
-    Returns {"ok": bool, "models": [...], "error": str}
-    """
-    try:
-        resp = requests.get("http://localhost:11434/api/tags", timeout=5)
-        resp.raise_for_status()
-        models = [m["name"] for m in resp.json().get("models", [])]
-        model_ready = any(OLLAMA_MODEL.split(":")[0] in m for m in models)
-        return {"ok": model_ready, "models": models, "error": ""}
-    except Exception as e:
-        return {"ok": False, "models": [], "error": str(e)}
-
-
-# ──────────────────────────────────────────────
-# Build RAG index
-# ──────────────────────────────────────────────
-
-def build_index(papers: List[Dict]) -> PaperIndex:
-    """Chunk all papers and build the FAISS vector index"""
+def build_index(papers):
     chunks = chunk_papers(papers)
-    index = PaperIndex()
+    index  = PaperIndex()
     index.build(chunks)
     return index
 
 
-# ──────────────────────────────────────────────
-# Phase 2 — Summarize a single paper via RAG
-# ──────────────────────────────────────────────
-
-SUMMARY_PROMPT = """You are an expert research analyst. Analyze the research paper excerpt below and extract key information.
-
-Respond with valid JSON only — no text outside the JSON block.
+SUMMARY_PROMPT = """Analyze the research paper excerpt below. Return valid JSON only, no extra text.
 
 {{
-  "title": "Paper title (or 'Unknown' if not found)",
-  "year": "Publication year or 'unknown'",
-  "authors": "Main authors or 'unknown'",
-  "problem": "The specific problem this paper solves — one sentence",
-  "method": "The method, model, or algorithm used",
-  "dataset": "Dataset(s) used for experiments",
-  "main_result": "Most important numerical or qualitative result",
+  "title": "Paper title",
+  "year": "year or unknown",
+  "authors": "authors or unknown",
+  "problem": "one-sentence problem statement",
+  "method": "method or algorithm used",
+  "dataset": "dataset(s) used",
+  "main_result": "key result",
   "limitations": ["limitation 1", "limitation 2", "limitation 3"],
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+  "keywords": ["kw1", "kw2", "kw3", "kw4", "kw5"]
 }}
 
 --- PAPER EXCERPT ---
 {context}
---- END EXCERPT ---
-
-JSON response:"""
+--- END ---"""
 
 
-def summarize_paper(index: PaperIndex, filename: str) -> dict:
-    """
-    Summarize one paper using RAG:
-    1. Retrieve the most relevant chunks from that paper.
-    2. Feed them to the local LLM.
-    """
-    # Retrieve chunks covering the key sections
+def summarize_paper(index, filename):
     context = build_paper_context(
         index, filename,
         query="title authors abstract problem method dataset results limitations keywords",
-        top_k=5,
-        max_chars=3200
+        top_k=4,
+        max_chars=2500
     )
-
     if not context.strip():
-        return _error_summary(filename, "No content retrieved from RAG index")
-
-    prompt = SUMMARY_PROMPT.format(context=context)
-
+        return {
+            "filename": filename, "status": "error", "error": "No RAG content",
+            "title": filename, "year": "?", "authors": "?", "problem": "?",
+            "method": "?", "dataset": "?", "main_result": "?",
+            "limitations": [], "keywords": []
+        }
     try:
-        raw = _ollama(prompt)
+        raw    = _infer(SUMMARY_PROMPT.format(context=context), max_new_tokens=600)
         result = _parse_json(raw)
         if isinstance(result, dict):
             result["filename"] = filename
             result["status"]   = "ok"
             return result
-        return _error_summary(filename, "LLM returned non-dict JSON")
-    except json.JSONDecodeError as e:
-        return _error_summary(filename, f"JSON parse error: {e}")
-    except RuntimeError as e:
-        return _error_summary(filename, str(e))
+        raise ValueError("Response is not a dict")
     except Exception as e:
-        return _error_summary(filename, str(e))
+        return {
+            "filename": filename, "status": "error", "error": str(e),
+            "title": filename, "year": "?", "authors": "?", "problem": "?",
+            "method": "?", "dataset": "?", "main_result": "?",
+            "limitations": [], "keywords": []
+        }
 
 
-def _error_summary(filename: str, error: str) -> dict:
-    return {
-        "filename": filename, "status": "error", "error": error,
-        "title": filename, "year": "unknown", "authors": "unknown",
-        "problem": "Failed to extract information",
-        "method": "unknown", "dataset": "unknown", "main_result": "unknown",
-        "limitations": [], "keywords": []
-    }
-
-
-# ──────────────────────────────────────────────
-# Phase 3 — Gap detection via RAG
-# ──────────────────────────────────────────────
-
-GAP_PROMPT = """You are an expert at identifying research gaps in scientific literature.
-
-Below are excerpts retrieved from {n_papers} research papers on the same topic.
-Analyze them carefully and produce a structured gap analysis.
-
-Respond with valid JSON only — no text outside the JSON block.
+GAP_PROMPT = """Identify research gaps from {n_papers} research paper excerpts below.
+Return valid JSON only, no extra text.
 
 {{
-  "common_methods": ["method 1", "method 2", "method 3"],
-  "common_datasets": ["dataset 1", "dataset 2"],
-  "common_limitations": ["shared limitation 1", "shared limitation 2", "shared limitation 3"],
+  "common_methods": ["method1", "method2", "method3"],
+  "common_datasets": ["dataset1", "dataset2"],
+  "common_limitations": ["limitation1", "limitation2", "limitation3"],
   "research_gaps": [
-    {{
-      "gap": "Precise description of the research gap",
-      "evidence": "Which papers or patterns reveal this gap",
-      "novelty_score": 8.5
-    }},
-    {{
-      "gap": "Second gap",
-      "evidence": "Evidence",
-      "novelty_score": 7.0
-    }},
-    {{
-      "gap": "Third gap",
-      "evidence": "Evidence",
-      "novelty_score": 6.0
-    }}
+    {{"gap": "gap description", "evidence": "evidence from papers", "novelty_score": 8.5}},
+    {{"gap": "gap 2",           "evidence": "evidence",             "novelty_score": 7.0}},
+    {{"gap": "gap 3",           "evidence": "evidence",             "novelty_score": 6.0}}
   ],
   "suggested_ideas": [
-    {{
-      "idea": "A concrete research idea that addresses the gap",
-      "addresses_gap": "Which gap it targets",
-      "feasibility": "High / Medium / Low",
-      "why_promising": "Why this direction is worth pursuing"
-    }},
-    {{
-      "idea": "Second idea",
-      "addresses_gap": "Gap it targets",
-      "feasibility": "High",
-      "why_promising": "Reason"
-    }}
+    {{"idea": "idea title", "addresses_gap": "gap it targets", "feasibility": "High",   "why_promising": "reason"}},
+    {{"idea": "idea 2",     "addresses_gap": "gap it targets", "feasibility": "Medium", "why_promising": "reason"}}
   ],
-  "overall_summary": "2-3 sentence overview of the field's current state and main trends"
+  "overall_summary": "2-3 sentence overview of the field"
 }}
 
---- RETRIEVED EXCERPTS ---
+--- CROSS-PAPER EXCERPTS ---
 {context}
---- END EXCERPTS ---
 
-Also consider this structured summary of all papers:
-{summaries_text}
-
-JSON response:"""
+--- PAPER SUMMARIES ---
+{summaries_text}"""
 
 
-def detect_gaps(summaries: List[Dict], index: PaperIndex) -> dict:
-    """
-    Detect research gaps using RAG:
-    1. Retrieve cross-paper chunks most relevant to gap analysis.
-    2. Also pass structured summaries for grounding.
-    3. Feed everything to the local LLM.
-    """
-    # Cross-paper retrieval focused on gaps & limitations
+def _build_summaries_text(summaries):
+    lines = []
+    for i, s in enumerate(summaries, 1):
+        title    = s.get("title",    s.get("filename", f"Paper {i}"))
+        method   = s.get("method",   "N/A")
+        dataset  = s.get("dataset",  "N/A")
+        lims     = s.get("limitations", [])
+        lims_str = "; ".join(lims) if isinstance(lims, list) else str(lims)
+        lines.append(f"Paper {i}: {title}")
+        lines.append(f"  Method: {method}")
+        lines.append(f"  Dataset: {dataset}")
+        lines.append(f"  Limitations: {lims_str}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def detect_gaps(summaries, index):
     context = build_cross_paper_context(
         index,
         query="research gaps limitations future work unexplored directions",
         top_k_per_paper=2,
-        max_chars=4000
+        max_chars=3000
     )
-
-    # Build a compact text table of all summaries
-    summaries_text = ""
-    for i, s in enumerate(summaries, 1):
-        summaries_text += (
-            f"Paper {i}: {s.get('title', s.get('filename', f'Paper {i}'))}\n"
-            f"  Method: {s.get('method', 'N/A')}\n"
-            f"  Dataset: {s.get('dataset', 'N/A')}\n"
-            f"  Result: {s.get('main_result', 'N/A')}\n"
-            f"  Limitations: {'; '.join(s.get('limitations', []))}\n\n"
-        )
-
     prompt = GAP_PROMPT.format(
         n_papers=len(summaries),
         context=context,
-        summaries_text=summaries_text
+        summaries_text=_build_summaries_text(summaries)
     )
-
     try:
-        raw = _ollama(prompt, temperature=0.2)
+        raw    = _infer(prompt, max_new_tokens=900, temperature=0.2)
         result = _parse_json(raw)
         if isinstance(result, dict):
             result["status"] = "ok"
             return result
-        return _error_gaps("LLM returned non-dict JSON")
-    except json.JSONDecodeError as e:
-        return _error_gaps(f"JSON parse error: {e}")
-    except RuntimeError as e:
-        return _error_gaps(str(e))
+        raise ValueError("Response is not a dict")
     except Exception as e:
-        return _error_gaps(str(e))
-
-
-def _error_gaps(error: str) -> dict:
-    return {
-        "status": "error", "error": error,
-        "common_methods": [], "common_datasets": [], "common_limitations": [],
-        "research_gaps": [], "suggested_ideas": [],
-        "overall_summary": "Analysis failed."
-    }
-
-
-# ──────────────────────────────────────────────
-# Citation graph relations
-# ──────────────────────────────────────────────
-
-CITATION_PROMPT = """Based on the summaries below, identify logical relationships between the papers.
-
-{summaries_text}
-
-Respond with valid JSON only:
-{{
-  "relations": [
-    {{"from": "1", "to": "2", "type": "extends / compares / uses_same_dataset / contradicts"}},
-    {{"from": "2", "to": "3", "type": "extends"}}
-  ]
-}}
-
-Use paper numbers (1, 2, 3...) as identifiers. Only include meaningful relations.
-
-JSON response:"""
-
-
-def build_citation_relations(summaries: List[Dict]) -> List[Dict]:
-    """Extract inter-paper relationships using the local LLM"""
-    summaries_text = ""
-    for i, s in enumerate(summaries, 1):
-        summaries_text += (
-            f"Paper {i}: {s.get('title', f'Paper {i}')} "
-            f"— Method: {s.get('method', '')} "
-            f"— Dataset: {s.get('dataset', '')}\n"
-        )
-
-    prompt = CITATION_PROMPT.format(summaries_text=summaries_text)
-
-    try:
-        raw = _ollama(prompt)
-        data = _parse_json(raw)
-        return data.get("relations", []) if isinstance(data, dict) else []
-    except Exception:
-        return []
-
-
-if __name__ == "__main__":
-    status = check_ollama()
-    print("Ollama status:", status)
+        return {
+            "status": "error", "error": str(e),
+            "common_methods": [], "common_datasets": [], "common_limitations": [],
+            "research_gaps": [], "suggested_ideas": [],
+            "overall_summary": "Analysis failed."
+        }
